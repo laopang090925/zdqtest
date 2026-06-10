@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高保真原型 Prompt 生成器</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f5f5f4;--bg3:#eeece8;
+  --text:#1a1a1a;--text2:#6b6b6b;--text3:#9a9a9a;
+  --border:rgba(0,0,0,0.10);--border2:rgba(0,0,0,0.20);--border3:rgba(0,0,0,0.36);
+  --radius:8px;--radius-lg:12px;
+  --font:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:"SF Mono","Fira Code","Courier New",monospace;
+  --accent:#2563eb;
+  --green:#16a34a;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
+    --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
+    --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.16);--border3:rgba(255,255,255,0.28);
+  }
+}
+body{font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg3);min-height:100vh;padding:2rem 1rem}
+.page{max-width:780px;margin:0 auto;background:var(--bg);border-radius:var(--radius-lg);border:0.5px solid var(--border2);padding:2rem}
+.page-header{margin-bottom:1.75rem}
+.page-header h1{font-size:20px;font-weight:700;margin-bottom:6px}
+.page-header p{font-size:13px;color:var(--text2);line-height:1.6}
+
+.section{margin-bottom:1.4rem}
+.lbl{font-size:13px;font-weight:600;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.req{font-size:11px;padding:2px 7px;border-radius:20px;background:var(--bg2);color:var(--text2);border:0.5px solid var(--border2);font-weight:400}
+.hint{font-size:12px;color:var(--text2);margin-bottom:6px;line-height:1.5}
+.inline-tip{font-size:12px;color:var(--text2);padding:7px 12px;background:var(--bg2);border-radius:var(--radius);border-left:2px solid var(--border2);line-height:1.6;margin-top:8px}
+
+.tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mode-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+
+.sel-card{padding:12px 8px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);cursor:pointer;text-align:center;transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:5px}
+.sel-card .c-icon{font-size:22px;color:var(--text2);line-height:1}
+.sel-card .c-name{font-size:12px;font-weight:600;color:var(--text2)}
+.sel-card .c-sub{font-size:11px;color:var(--text3);line-height:1.3}
+.sel-card.active{border-color:var(--accent);background:rgba(37,99,235,0.06)}
+.sel-card.active .c-icon,.sel-card.active .c-name{color:var(--accent)}
+.sel-card:hover:not(.active){background:var(--bg2)}
+
+input[type=text],textarea{width:100%;font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 12px;outline:none;transition:border-color 0.15s}
+input[type=text]:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,0.10)}
+textarea{resize:vertical;line-height:1.6}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:5px 13px;border-radius:20px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer;transition:all 0.15s;user-select:none}
+.chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chip:hover:not(.on){border-color:var(--border3);color:var(--text)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.divider{height:0.5px;background:var(--border);margin:1.75rem 0}
+
+/* 折叠区块 */
+.collapsible-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:10px 0;border-bottom:0.5px solid var(--border);margin-bottom:0;user-select:none}
+.collapsible-header:hover .col-title{color:var(--accent)}
+.col-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--text);transition:color 0.15s}
+.col-arrow{font-size:11px;color:var(--text3);transition:transform 0.2s}
+.col-arrow.open{transform:rotate(180deg)}
+.collapsible-body{overflow:hidden;transition:max-height 0.3s ease,opacity 0.2s;max-height:0;opacity:0;pointer-events:none}
+.collapsible-body.open{max-height:800px;opacity:1;pointer-events:auto;padding-top:14px}
+
+/* 上传 */
+.upload-area{border:0.5px dashed var(--border2);border-radius:var(--radius);padding:14px;background:var(--bg2);cursor:pointer;transition:border-color 0.15s}
+.upload-area:hover{border-color:var(--accent)}
+.upload-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)}
+.upload-label i{font-size:16px}
+.upload-label span b{color:var(--accent)}
+#img-input{display:none}
+.img-previews{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.img-thumb{position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;border:0.5px solid var(--border2)}
+.img-thumb img{width:100%;height:100%;object-fit:cover}
+.img-thumb .del-btn{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.55);color:#fff;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1}
+
+/* 智能解析 */
+.analyze-box{background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius-lg);overflow:hidden}
+.analyze-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none}
+.analyze-header:hover .a-title{color:var(--accent)}
+.a-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;color:var(--text);transition:color 0.15s}
+.analyze-body{overflow:hidden;transition:max-height 0.3s ease,opacity 0.2s;max-height:0;opacity:0;pointer-events:none}
+.analyze-body.open{max-height:600px;opacity:1;pointer-events:auto}
+.analyze-inner{padding:0 16px 16px}
+.analyze-inner textarea{background:var(--bg);min-height:90px}
+.analyze-hint{font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5}
+
+/* 按钮 */
+.action-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center}
+.btn{font-size:13px;padding:9px 20px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:7px;font-family:var(--font);justify-content:center}
+.btn:hover{opacity:0.88}
+.btn:active{transform:scale(0.98)}
+.btn.green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.black{background:#111;color:#fff;border-color:#111}
+@media(prefers-color-scheme:dark){.btn.black{background:#e5e5e5;color:#111;border-color:#e5e5e5}}
+.copied{font-size:12px;color:var(--text2);display:none;align-items:center;gap:4px}
+.copied.show{display:flex}
+
+/* 分析loading */
+.analyzing{display:none;font-size:12px;color:var(--accent);align-items:center;gap:6px}
+.analyzing.show{display:flex}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+
+/* ── AI工具 Logo 彩色/灰化切换 ── */
+/* 未选中：logo 灰化 */
+.sel-card:not(.active) .logo-bg-claude { fill: var(--bg2) }
+.sel-card:not(.active) .logo-mark-claude rect { fill: var(--text3) !important; }
+.sel-card:not(.active) .logo-bg-cursor { fill: var(--bg2) }
+.sel-card:not(.active) .logo-mark-cursor rect,
+.sel-card:not(.active) .logo-mark-cursor line { fill: var(--text3) !important; stroke: var(--text3) !important; }
+.sel-card:not(.active) .figma-red,
+.sel-card:not(.active) .figma-orange,
+.sel-card:not(.active) .figma-purple,
+.sel-card:not(.active) .figma-blue,
+.sel-card:not(.active) .figma-green { fill: var(--text3) !important; }
+/* 选中：logo 保持原色 */
+.sel-card.active .logo-bg-claude { fill: #F5F0EB }
+.sel-card.active .logo-mark-claude rect { fill: #CC785C !important; }
+.sel-card.active .logo-bg-cursor { fill: #1A1A1A }
+.sel-card.active .logo-mark-cursor rect { fill: white !important; }
+.sel-card.active .logo-mark-cursor line { stroke: white !important; }
+.sel-card.active .figma-red { fill: #F24E1E !important; }
+.sel-card.active .figma-orange { fill: #FF7262 !important; }
+.sel-card.active .figma-purple { fill: #A259FF !important; }
+.sel-card.active .figma-blue { fill: #1ABCFE !important; }
+.sel-card.active .figma-green { fill: #0ACF83 !important; }
+
+/* 圆形色点 */
+.cdot{width:30px;height:30px;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;flex-shrink:0;padding:0;outline:none;box-shadow:0 1px 3px rgba(0,0,0,0.18)}
+.cdot:hover{transform:scale(1.12);box-shadow:0 2px 8px rgba(0,0,0,0.22)}
+.cdot.active{border-color:#fff;box-shadow:0 0 0 2.5px var(--active-col,#374151),0 2px 8px rgba(0,0,0,0.22);transform:scale(1.1)}
+
+/* 配色方案列表行 */
+.scheme-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius);cursor:pointer;transition:background 0.12s;border:0.5px solid transparent}
+.scheme-row:hover{background:var(--bg2)}
+.scheme-row.selected{background:var(--bg2);border-color:var(--border2)}
+.scheme-swatches{display:flex;border-radius:6px;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,0.12)}
+.swatch-block{width:22px;height:40px}
+.scheme-info{flex:1;min-width:0}
+.scheme-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.scheme-desc{font-size:11px;color:var(--text3);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scheme-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.scheme-tag{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--bg3);color:var(--text2);border:0.5px solid var(--border)}
+
+@media(max-width:600px){
+  .page{padding:1.25rem}
+  .mode-grid{grid-template-columns:repeat(2,1fr)}
+  .tool-grid{grid-template-columns:1fr 1fr}
+  .grid2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- ══ ZDQ Logo ══ -->
+  <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1.75rem">
+    <svg width="72" height="72" viewBox="215 55 250 250" xmlns="http://www.w3.org/2000/svg" style="display:block">
+      <defs>
+        <linearGradient id="l-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0A2540"/>
+          <stop offset="55%" stop-color="#0D6E6E"/>
+          <stop offset="100%" stop-color="#1A3A5C"/>
+        </linearGradient>
+        <linearGradient id="l-sh" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#4EFFD6"/>
+          <stop offset="100%" stop-color="#00C9A7"/>
+        </linearGradient>
+        <linearGradient id="l-gd" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FFD97D"/>
+          <stop offset="100%" stop-color="#E8A020"/>
+        </linearGradient>
+        <radialGradient id="l-gw" cx="35%" cy="30%" r="60%">
+          <stop offset="0%" stop-color="rgba(78,255,214,0.18)"/>
+          <stop offset="100%" stop-color="rgba(78,255,214,0)"/>
+        </radialGradient>
+        <filter id="l-sd" x="-15%" y="-10%" width="130%" height="130%">
+          <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#051520" flood-opacity="0.5"/>
+        </filter>
+      </defs>
+      <rect x="215" y="55" width="250" height="250" rx="56" fill="url(#l-bg)" filter="url(#l-sd)"/>
+      <rect x="215" y="55" width="250" height="250" rx="56" fill="url(#l-gw)"/>
+      <rect x="215" y="55" width="250" height="250" rx="56" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
+      <rect x="258" y="118" width="90" height="13" rx="6.5" fill="url(#l-sh)"/>
+      <polygon points="348,131 258,211 278,211 348,144" fill="url(#l-sh)" opacity="0.92"/>
+      <rect x="258" y="211" width="90" height="13" rx="6.5" fill="url(#l-gd)"/>
+      <path d="M315,118 Q382,118 382,166 Q382,214 315,214" fill="none" stroke="url(#l-sh)" stroke-width="13" stroke-linecap="round" opacity="0.85"/>
+      <path d="M315,130 Q368,130 368,166 Q368,202 315,202" fill="none" stroke="#4EFFD6" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+      <path d="M315,142 Q354,142 354,166 Q354,190 315,190" fill="none" stroke="url(#l-gd)" stroke-width="3.5" stroke-linecap="round" opacity="0.65"/>
+      <circle cx="380" cy="258" r="20" fill="#0A2540" stroke="url(#l-sh)" stroke-width="7"/>
+      <circle cx="380" cy="258" r="5" fill="url(#l-gd)"/>
+      <line x1="394" y1="271" x2="408" y2="285" stroke="url(#l-gd)" stroke-width="7" stroke-linecap="round"/>
+      <line x1="394" y1="271" x2="408" y2="285" stroke="#FFD97D" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+      <circle cx="242" cy="78" r="4" fill="url(#l-gd)" opacity="0.8"/>
+      <circle cx="256" cy="78" r="4" fill="url(#l-sh)" opacity="0.6"/>
+      <circle cx="270" cy="78" r="4" fill="url(#l-sh)" opacity="0.3"/>
+    </svg>
+    <div style="margin-top:10px;text-align:center">
+      <div style="font-size:18px;font-weight:800;letter-spacing:8px;color:#0A2540;font-family:-apple-system,'PingFang SC',sans-serif;line-height:1">ZDQ</div>
+      <div style="font-size:10px;font-weight:400;letter-spacing:4px;color:#0D9488;margin-top:4px;font-family:-apple-system,'PingFang SC',sans-serif">PROMPT STUDIO</div>
+    </div>
+  </div>
+
+  <div class="page-header" style="text-align:center">
+    <h1>高保真原型 Prompt 生成器</h1>
+    <p>专为 B 端产品经理定制 · 支持管理后台、小程序、App、H5 · 适配 Claude、Cursor、Figma Make</p>
+  </div>
+
+  <!-- ① AI 角色定义 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-user-tie" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> AI 角色定义</div>
+    <div class="hint">描述 AI 在本次设计中充当的角色与职能，影响输出的专业视角和侧重点</div>
+    <div class="chips" id="role-chips" style="margin-bottom:8px">
+      <div class="chip" onclick="selectRole(this,'资深 UI 设计师')">资深 UI 设计师</div>
+      <div class="chip" onclick="selectRole(this,'全栈前端工程师')">全栈前端工程师</div>
+      <div class="chip" onclick="selectRole(this,'B 端产品设计专家')">B 端产品设计专家</div>
+      <div class="chip" onclick="selectRole(this,'交互体验设计师')">交互体验设计师</div>
+      <div class="chip on" onclick="selectRole(this,'自定义')">自定义</div>
+    </div>
+    <textarea id="role-custom" rows="4" style="min-height:90px;resize:vertical" placeholder="自定义角色描述，例如：拥有 10 年 SaaS 产品设计经验的首席设计师，擅长 B 端产品的信息架构设计与交互规范制定，深度理解企业用户的工作流程..."></textarea>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ② AI工具 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-robot" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> AI 工具 <span class="req">必选</span></div>
+    <div class="tool-grid">
+
+      <!-- Claude -->
+      <div class="sel-card active" id="tool-claude" onclick="selectTool('claude')">
+        <span class="c-icon tool-logo" id="logo-claude">
+          <!-- Claude 品牌 Logo SVG -->
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="14" cy="14" r="13" class="logo-bg-claude" fill="#F5F0EB"/>
+            <g class="logo-mark-claude">
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(0 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(45 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(90 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(135 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(180 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(225 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(270 14 14)"/>
+              <rect x="13" y="5" width="2" height="5.5" rx="1" fill="#CC785C" transform="rotate(315 14 14)"/>
+            </g>
+          </svg>
+        </span>
+        <div class="c-name">Claude</div>
+        <div class="c-sub">单文件 HTML，直接运行</div>
+      </div>
+
+      <!-- Cursor -->
+      <div class="sel-card" id="tool-cursor" onclick="selectTool('cursor')">
+        <span class="c-icon tool-logo" id="logo-cursor">
+          <!-- Cursor 品牌 Logo SVG：黑色方块+白色光标箭头 -->
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="28" height="28" rx="7" class="logo-bg-cursor" fill="#1A1A1A"/>
+            <g class="logo-mark-cursor">
+              <!-- Cursor 标志：仿官方图标，对角分隔两个方块 -->
+              <rect x="5.5" y="5.5" width="9" height="9" rx="2" fill="white"/>
+              <rect x="13.5" y="13.5" width="9" height="9" rx="2" fill="white"/>
+              <!-- 中间对角高光线 -->
+              <line x1="14.5" y1="5.5" x2="22.5" y2="13.5" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.25"/>
+              <line x1="5.5" y1="14.5" x2="13.5" y2="22.5" stroke="white" stroke-width="1.2" stroke-linecap="round" opacity="0.25"/>
+            </g>
+          </svg>
+        </span>
+        <div class="c-name">Cursor</div>
+        <div class="c-sub">多文件项目结构</div>
+      </div>
+
+      <!-- Figma -->
+      <div class="sel-card" id="tool-figma" onclick="selectTool('figma')">
+        <span class="c-icon tool-logo" id="logo-figma">
+          <!-- Figma 官方品牌色 Logo -->
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Figma 经典五色组件标志 -->
+            <!-- 左上：红色 -->
+            <path d="M8 4 L14 4 L14 11 L8 11 C6.34 11 5 9.66 5 8 C5 6.34 6.34 4 8 4Z" class="figma-red" fill="#F24E1E"/>
+            <!-- 左下：绿色 -->
+            <path d="M5 14 C5 12.34 6.34 11 8 11 L14 11 L14 17 L8 17 C6.34 17 5 15.66 5 14Z" class="figma-orange" fill="#FF7262"/>
+            <!-- 左底：紫色 -->
+            <path d="M8 17 L14 17 L14 24 L8 24 C6.34 24 5 22.66 5 21 C5 19.34 6.34 17 8 17Z" class="figma-purple" fill="#A259FF"/>
+            <!-- 右上：蓝色 -->
+            <path d="M14 4 L20 4 C21.66 4 23 5.34 23 7 C23 8.66 21.66 10 20 10 L14 10 Z" class="figma-blue" fill="#1ABCFE"/>
+            <!-- 中心：绿色圆 -->
+            <circle cx="20" cy="14" r="3.5" class="figma-green" fill="#0ACF83"/>
+          </svg>
+        </span>
+        <div class="c-name">Figma Make</div>
+        <div class="c-sub">可编辑组件与布局</div>
+      </div>
+
+    </div>
+    <div id="tool-tip" class="inline-tip"></div>
+  </div>
+
+  <!-- ③ 端类型 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-layer-group" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 端类型 <span class="req">必选</span></div>
+    <div class="mode-grid">
+      <div class="sel-card active" id="mode-admin" onclick="selectMode('admin')">
+        <span class="c-icon"><i class="fa-solid fa-table-columns"></i></span>
+        <div class="c-name">管理后台</div>
+        <div class="c-sub">PC 端 Web</div>
+      </div>
+      <div class="sel-card" id="mode-miniapp" onclick="selectMode('miniapp')">
+        <span class="c-icon"><i class="fa-brands fa-weixin"></i></span>
+        <div class="c-name">小程序</div>
+        <div class="c-sub">WeChat</div>
+      </div>
+      <div class="sel-card" id="mode-app" onclick="selectMode('app')">
+        <span class="c-icon"><i class="fa-solid fa-mobile-screen"></i></span>
+        <div class="c-name">移动 App</div>
+        <div class="c-sub">iOS / Android</div>
+      </div>
+      <div class="sel-card" id="mode-h5" onclick="selectMode('h5')">
+        <span class="c-icon"><i class="fa-brands fa-html5"></i></span>
+        <div class="c-name">H5</div>
+        <div class="c-sub">移动端网页/可嵌入</div>
+      </div>
+    </div>
+    <div id="preset-tip" class="inline-tip"></div>
+  </div>
+
+  <!-- ④ 页面名称 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-regular fa-file-lines" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 页面名称 <span class="req">必填</span></div>
+    <div class="hint">例如：订单管理列表、用户权限配置、商品发布表单</div>
+    <input type="text" id="page-name" placeholder="请输入页面名称..." />
+  </div>
+
+  <!-- ⑤ 目标用户 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-user-group" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 目标用户</div>
+    <input type="text" id="target-user" placeholder="例如：运营人员、企业管理员、B 端商户..." />
+  </div>
+
+  <!-- ⑥ 核心功能 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-list-check" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 核心功能需求 <span class="req">必填</span></div>
+    <div class="hint">列出该页面的主要功能点，每行一条</div>
+    <textarea id="features" rows="5" placeholder="例如：
+- 列表支持多条件筛选（时间、状态、负责人）
+- 表格支持批量操作（导出、删除、状态变更）
+- 点击行展开查看订单明细
+- 数据统计卡片展示今日核心指标"></textarea>
+  </div>
+
+  <!-- ⑦ 设计风格描述 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-pen-nib" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 设计风格描述</div>
+    <div class="hint">用自然语言补充描述期望的设计风格，AI 会据此调整细节表现</div>
+    <textarea id="style-desc" rows="3" placeholder="例如：整体风格参考 Linear 的极简美学，大量留白，字体层级清晰，卡片使用细边框而非阴影，交互动效克制流畅..."></textarea>
+  </div>
+
+  <!-- ⑧ 上传参考截图 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-regular fa-images" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 上传参考截图</div>
+    <div class="upload-area" onclick="document.getElementById('img-input').click()">
+      <label class="upload-label">
+        <i class="fa-regular fa-image"></i>
+        <span>点击选择图片，最多 8 张 · 支持 JPG / PNG / WebP</span>
+      </label>
+    </div>
+    <input type="file" id="img-input" accept="image/*" multiple onchange="handleImgs(this)">
+    <div class="img-previews" id="img-previews"></div>
+  </div>
+
+  <!-- ⑨ 视觉风格 & 主色调（折叠） -->
+  <div class="section" style="margin-bottom:0">
+    <div class="collapsible-header" onclick="toggleCollapse('vis-body','vis-arrow')">
+      <span class="col-title">
+        <i class="fa-solid fa-palette" style="color:var(--text3);font-size:13px"></i>
+        视觉风格 & 主色调
+        <span style="font-size:11px;font-weight:400;color:var(--text3)">· 最多各选 2 个，可折叠</span>
+      </span>
+      <i class="fa-solid fa-chevron-down col-arrow" id="vis-arrow"></i>
+    </div>
+    <div class="collapsible-body" id="vis-body">
+      <div class="grid2">
+        <div>
+          <div class="lbl" style="margin-bottom:8px"><i class="fa-solid fa-wand-sparkles" style="color:var(--text3);font-size:12px;width:16px;text-align:center"></i> 视觉风格</div>
+          <div class="chips" id="style-chips">
+            <div class="chip on" onclick="toggleMax(this,'style-chips',2)">简约现代</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">企业商务</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">极简主义</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">科技感</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">温暖友好</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">高端奢华</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">活泼年轻</div>
+            <div class="chip" onclick="toggleMax(this,'style-chips',2)">暗黑模式</div>
+          </div>
+        </div>
+        <div>
+          <div class="lbl" style="margin-bottom:10px"><i class="fa-solid fa-droplet" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 主色调 <span style="font-size:11px;font-weight:400;color:var(--text3)">· 单选，选后查看配色方案</span></div>
+          <div id="color-dots" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+            <button class="cdot active" data-color="#E53E3E" data-label="红色" title="红色 #E53E3E" onclick="selectColor(this)" style="background:#E53E3E"></button>
+            <button class="cdot" data-color="#DD6B20" data-label="橙色" title="橙色 #DD6B20" onclick="selectColor(this)" style="background:#DD6B20"></button>
+            <button class="cdot" data-color="#D69E2E" data-label="金黄" title="金黄 #D69E2E" onclick="selectColor(this)" style="background:#D69E2E"></button>
+            <button class="cdot" data-color="#16A34A" data-label="翠绿" title="翠绿 #16A34A" onclick="selectColor(this)" style="background:#16A34A"></button>
+            <button class="cdot" data-color="#0D9488" data-label="青绿" title="青绿 #0D9488" onclick="selectColor(this)" style="background:#0D9488"></button>
+            <button class="cdot" data-color="#2563EB" data-label="天蓝" title="天蓝 #2563EB" onclick="selectColor(this)" style="background:#2563EB"></button>
+            <button class="cdot" data-color="#1E3A8A" data-label="深蓝" title="深蓝 #1E3A8A" onclick="selectColor(this)" style="background:#1E3A8A"></button>
+            <button class="cdot" data-color="#7C3AED" data-label="紫色" title="紫色 #7C3AED" onclick="selectColor(this)" style="background:#7C3AED"></button>
+            <button class="cdot" data-color="#9F7AEA" data-label="浅紫" title="浅紫 #9F7AEA" onclick="selectColor(this)" style="background:#9F7AEA"></button>
+            <button class="cdot" data-color="#DB2777" data-label="玫红" title="玫红 #DB2777" onclick="selectColor(this)" style="background:#DB2777"></button>
+            <button class="cdot" data-color="#374151" data-label="中性灰" title="中性灰 #374151" onclick="selectColor(this)" style="background:#374151"></button>
+            <button class="cdot" data-color="custom" data-label="自定义" title="品牌色自定义" onclick="selectColor(this)" style="background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);border:0.5px solid var(--border2)"></button>
+          </div>
+          <div id="color-label" style="font-size:12px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px">
+            <span id="color-dot-preview" style="width:10px;height:10px;border-radius:50%;background:#E53E3E;display:inline-block"></span>
+            <span id="color-label-text">红色 #E53E3E</span>
+          </div>
+          <!-- 配色方案展示区 -->
+          <div id="palette-panel" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ⑩ UI组件（折叠） -->
+  <div class="section" style="margin-bottom:0">
+    <div class="collapsible-header" onclick="toggleCollapse('comp-body','comp-arrow')">
+      <span class="col-title">
+        <i class="fa-solid fa-puzzle-piece" style="color:var(--text3);font-size:13px"></i>
+        UI 组件
+        <span style="font-size:11px;font-weight:400;color:var(--text3)">· 按需勾选，可折叠</span>
+      </span>
+      <i class="fa-solid fa-chevron-down col-arrow" id="comp-arrow"></i>
+    </div>
+    <div class="collapsible-body" id="comp-body">
+      <div class="chips" id="comp-chips"></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ⑪ 交互说明 -->
+  <div class="section">
+    <div class="lbl"><i class="fa-solid fa-hand-pointer" style="color:var(--text3);font-size:13px;width:16px;text-align:center"></i> 交互说明</div>
+    <div class="hint">特殊交互、动效要求、状态说明、已有设计规范等</div>
+    <textarea id="extra" rows="2" placeholder="例如：需要支持深色模式；表格行可点击展开；图表需要可交互的 tooltip；弹窗关闭需二次确认..."></textarea>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ⑫ 智能解析（折叠） -->
+  <div class="analyze-box">
+    <div class="analyze-header" onclick="toggleAnalyze()">
+      <span class="a-title">
+        <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i>
+        智能解析 · 粘贴已有 Prompt 自动填写配置
+      </span>
+      <i class="fa-solid fa-chevron-down col-arrow" id="analyze-arrow"></i>
+    </div>
+    <div class="analyze-body" id="analyze-body">
+      <div class="analyze-inner">
+        <textarea id="analyze-input" rows="4" placeholder="将已有的原型需求描述或 prompt 粘贴到此处，点击「自动分析」按钮，系统将自动识别并填写上方各配置项，填写后可针对性微调..."></textarea>
+        <div class="analyze-hint">支持识别：端类型、页面名称、目标用户、功能需求、视觉风格、色调、AI角色等关键信息</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+          <button class="btn" style="background:var(--accent);color:#fff;border-color:var(--accent);padding:8px 18px" onclick="doAnalyze()">
+            <i class="fa-solid fa-magnifying-glass"></i> 自动分析
+          </button>
+          <span class="analyzing" id="analyzing-tip"><i class="fa-solid fa-circle-notch spin"></i> 分析中...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 按钮区 -->
+  <div class="action-row" style="margin-top:1.75rem">
+    <button class="btn green" onclick="gen()"><i class="fa-solid fa-sparkles"></i> 生成 Prompt</button>
+    <button class="btn black" onclick="exportMD()"><i class="fa-solid fa-file-arrow-down"></i> 导出 .MD</button>
+  </div>
+</div>
+
+<!-- 弹窗 -->
+<div id="modal-mask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;align-items:center;justify-content:center;padding:1rem" onclick="closeModal(event)">
+  <div style="background:var(--bg);border-radius:var(--radius-lg);border:0.5px solid var(--border2);width:100%;max-width:720px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:0.5px solid var(--border)">
+      <span style="font-size:14px;font-weight:600">生成的 Prompt</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn" onclick="copyOut()" style="padding:6px 14px;font-size:12px"><i class="fa-regular fa-copy"></i> 复制</button>
+        <span class="copied" id="copied-tip" style="font-size:12px"><i class="fa-solid fa-check"></i> 已复制</span>
+        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text2);padding:2px 6px;line-height:1">&#x2715;</button>
+      </div>
+    </div>
+    <div id="out" style="flex:1;overflow-y:auto;padding:1.25rem;font-size:12px;line-height:1.9;color:var(--text);white-space:pre-wrap;font-family:var(--mono)"></div>
+  </div>
+</div>
+
+<script>
+const TOOLS={
+  claude:{tip:'输出单文件 HTML（含 CSS + JS），可直接在浏览器运行或粘贴到 Claude Artifacts 预览',fmt:'HTML + CSS + JS 单文件，可直接在浏览器运行',extra:`## Claude 专项要求\n- 输出完整单文件 HTML，不省略任何代码段\n- 可引用 CDN（cdnjs、unpkg、jsdelivr），勿引用需登录的资源\n- 如使用图片，用 placeholder 服务（如 picsum.photos）代替\n- 代码末尾附简短设计说明（3-5 条）`},
+  cursor:{tip:'适配 Cursor IDE：生成多文件项目结构，含组件拆分、路由配置、样式文件，可直接在项目中运行',fmt:'React + TypeScript 多文件结构（含组件拆分与路由）',extra:`## Cursor 专项要求\n- 输出完整项目文件结构，明确标注每个文件路径（如 src/pages/OrderList.tsx）\n- 组件按职责拆分：页面组件、业务组件、公共组件分层放置\n- 使用 TypeScript，关键 props 和数据结构需定义 interface\n- 样式优先使用 Tailwind CSS 或 CSS Modules，避免 inline style\n- 包含 package.json 依赖说明，列出所有需要安装的包\n- 数据用 mock 文件管理（src/mock/xxx.ts），不要直接写在组件里\n- 每个文件开头注释说明其职责`},
+  figma:{tip:'适配 Figma Make：输出组件描述，包含 Auto Layout、变体、样式变量等规范，方便在 Figma 中逐层搭建',fmt:'Figma Make 组件描述（含 Auto Layout 与变体规范）',extra:`## Figma Make 专项要求\n- 所有布局用 Auto Layout 描述（方向、间距、padding、对齐方式）\n- 颜色和文字样式使用 Figma 变量命名规范（如 color/primary/500、text/heading/h2）\n- 交互组件需定义变体（Variants）：Default / Hover / Disabled / Loading 状态\n- 图层命名语义化，遵循组件/元素/修饰符结构（如 Card/Header/Title）\n- 说明哪些组件设为 Main Component，哪些属性暴露为可编辑 Props\n- 给出组件树结构（用缩进表示层级）\n- 标注 8px 基础栅格，间距只使用 4 的倍数`}
+};
+
+const MODES={
+  admin:{tip:'已预设：企业级 B 端管理后台 · 高信息密度 · Ant Design 规范 · 1440px 宽屏 · 左侧导航栏',comps:['顶部导航栏','左侧菜单栏','面包屑','数据统计卡','数据表格','高级筛选器','批量操作栏','分页器','操作按钮组','状态标签','弹窗/Modal','抽屉/Drawer','表单','权限控制提示','空状态'],defaults:['数据表格','高级筛选器','操作按钮组','状态标签'],spec:`**平台规范**：PC Web 管理后台，视口宽度 1440px，左侧固定导航（宽 220px）+ 主内容区\n**设计系统**：参考 Ant Design 5.x，组件样式企业级、专业、克制\n**布局原则**：高信息密度，表格行高 48px，合理运用斑马纹和悬停高亮\n**操作反馈**：增删改操作需有 loading 态、成功/失败提示（Toast 或 Message）\n**权限意识**：按钮级权限控制，无权限操作显示禁用态并附 tooltip 说明`,outputNote:'输出完整页面，1440px 宽度下展示，左侧导航 + 主内容区双栏布局'},
+  miniapp:{tip:'已预设：微信小程序风格 · 375px · 底部 TabBar · 遵循微信设计规范',comps:['顶部导航栏（含返回）','底部 TabBar','搜索栏','内容卡片','列表项','底部操作栏','浮动按钮','表单（含 picker）','空状态','骨架屏','提示弹窗','半屏弹出层'],defaults:['顶部导航栏（含返回）','底部 TabBar','内容卡片','底部操作栏'],spec:`**平台规范**：微信小程序，视口宽度 375px\n**设计系统**：参考微信小程序官方设计规范，主色 #07C160 或指定品牌色\n**安全区域**：顶部状态栏 44px + 导航栏 48px，底部留 safe-area-inset-bottom\n**交互规范**：点击区域最小 44×44px，列表项支持左滑操作\n**性能意识**：图片懒加载，骨架屏优先展示`,outputNote:'输出 375px 移动端页面，模拟小程序视觉效果，可在浏览器手机模式预览'},
+  app:{tip:'已预设：原生 App 风格 · 375×812px 设备帧 · iOS/Android 双端规范',comps:['状态栏','顶部导航栏','底部 TabBar','列表/Feed 流','卡片组件','底部操作栏','浮动操作按钮','下拉刷新提示','加载更多','空状态','Toast 提示','半屏 Sheet'],defaults:['顶部导航栏','底部 TabBar','列表/Feed 流','底部操作栏'],spec:`**平台规范**：移动 App，设备框 375×812px（iPhone 14 比例），标注 iOS/Android 差异\n**iOS 规范**：导航栏居中标题，返回按钮文字+图标，底部 TabBar 含 safe area\n**Android 规范**：导航栏左对齐，底部手势导航说明\n**手势交互**：标注支持的手势（滑动返回、下拉刷新、上滑加载更多）\n**动效说明**：页面转场、列表进场、微交互在注释中描述`,outputNote:'输出带手机设备外壳的页面，375px 内容区，完整呈现 App 效果'},
+  h5:{tip:'已预设：移动端 H5 · 375px 响应式 · 适配微信/浏览器内嵌 · 注重首屏加载',comps:['顶部固定导航','底部操作栏','Banner/轮播图','卡片列表','商品详情区','价格展示','倒计时组件','分享提示','加载动画','空状态','Toast','半屏弹层'],defaults:['顶部固定导航','底部操作栏','卡片列表','Toast'],spec:`**平台规范**：移动端 H5，375px，在微信内置浏览器/普通浏览器均可运行\n**适配重点**：顶部留微信工具栏空间，底部 safe-area，1px 边框用 transform 实现\n**性能优先**：首屏资源最小化，关键 CSS 内联\n**分享场景**：首屏内容完整、视觉冲击力强，适合微信分享卡片截图\n**兼容性**：iOS Safari 14+，Android Chrome 90+`,outputNote:'输出纯 HTML 文件，375px 移动端布局，可直接在手机浏览器访问预览'}
+};
+
+let curMode='admin', curTool='claude';
+let uploadedImgs=[];
+
+// 折叠
+function toggleCollapse(bodyId, arrowId){
+  const body=document.getElementById(bodyId);
+  const arrow=document.getElementById(arrowId);
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+function toggleAnalyze(){
+  const body=document.getElementById('analyze-body');
+  const arrow=document.getElementById('analyze-arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+// 角色选择
+function selectRole(el, val){
+  document.querySelectorAll('#role-chips .chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  const customInput=document.getElementById('role-custom');
+  if(val==='自定义'){
+    customInput.style.display='block';
+    customInput.focus();
+  } else {
+    customInput.style.display='none';
+  }
+}
+
+function selectTool(t){
+  curTool=t;
+  Object.keys(TOOLS).forEach(k=>document.getElementById('tool-'+k).classList.toggle('active',k===t));
+  document.getElementById('tool-tip').textContent=TOOLS[t].tip;
+}
+
+function selectMode(m){
+  curMode=m;
+  Object.keys(MODES).forEach(k=>document.getElementById('mode-'+k).classList.toggle('active',k===m));
+  document.getElementById('preset-tip').textContent=MODES[m].tip;
+  renderComps();
+}
+
+function renderComps(){
+  const cfg=MODES[curMode];
+  document.getElementById('comp-chips').innerHTML=cfg.comps.map(c=>
+    `<div class="chip${cfg.defaults.includes(c)?' on':''}" onclick="this.classList.toggle('on')">${c}</div>`
+  ).join('');
+}
+
+function toggleMax(el,groupId,max){
+  const group=document.getElementById(groupId);
+  const onChips=[...group.querySelectorAll('.chip')].filter(c=>c.classList.contains('on'));
+  if(el.classList.contains('on')){ el.classList.remove('on'); }
+  else { if(onChips.length>=max) onChips[0].classList.remove('on'); el.classList.add('on'); }
+}
+
+// ── 配色方案数据（列表风格） ─────────────────────────────────
+const PALETTES = {
+  '#E53E3E':[
+    {name:'Crimson Pro',tags:['bold','saas'],desc:'深红主色配珊瑚辅色，适合强调行动力的 SaaS 产品',swatches:['#E53E3E','#C53030','#FED7D7','#FFFAF0','#2D3748','#718096']},
+    {name:'Red & Slate',tags:['dashboard','minimal'],desc:'红色 + 深石板灰底，适合数据看板和管理后台',swatches:['#E53E3E','#2D3748','#4A5568','#F7FAFC','#EBF4FF','#A0AEC0']},
+    {name:'Warm Alert',tags:['light','ecommerce'],desc:'红色 + 暖米白背景，电商常用警示与促销配色',swatches:['#E53E3E','#FC8181','#FFF5F5','#FFFAF0','#FFFFFF','#744210']},
+  ],
+  '#DD6B20':[
+    {name:'Ember',tags:['bold','premium'],desc:'橙色 + 深棕背景，质感强，参考 Cloudflare Workers',swatches:['#DD6B20','#F6AD55','#FEEBC8','#FFFAF0','#1A202C','#744210']},
+    {name:'Sunset SaaS',tags:['saas','light'],desc:'橙色 + 蓝色互补对比，活力与专业并存',swatches:['#DD6B20','#FEEBC8','#FFFFFF','#2B6CB0','#BEE3F8','#2D3748']},
+    {name:'Amber Minimal',tags:['minimal','dashboard'],desc:'橙黄 + 大量留白 + 深灰文字，简洁克制',swatches:['#DD6B20','#ED8936','#FEEBC8','#FFFFFF','#F7FAFC','#4A5568']},
+  ],
+  '#D69E2E':[
+    {name:'Gold Rush',tags:['premium','bold'],desc:'金黄 + 深海军蓝，高端金融类产品经典配色',swatches:['#D69E2E','#F6E05E','#FEFCBF','#1A365D','#2A4365','#E2E8F0']},
+    {name:'Amber Light',tags:['light','ecommerce'],desc:'金色 + 暖白背景，适合奖励、成就、积分类场景',swatches:['#D69E2E','#ECC94B','#FEFCBF','#FFFAF0','#FFFFFF','#744210']},
+    {name:'Harvest',tags:['saas','minimal'],desc:'金黄 + 橄榄绿辅色，自然有机感，适合农业/食品 SaaS',swatches:['#D69E2E','#B7791F','#FEFCBF','#F0FFF4','#276749','#1C4532']},
+  ],
+  '#16A34A':[
+    {name:'Growth',tags:['saas','light'],desc:'绿色主色 + 浅薄荷背景，参考 Shopify、Robinhood',swatches:['#16A34A','#22C55E','#DCFCE7','#F0FDF4','#FFFFFF','#14532D']},
+    {name:'Finance Pro',tags:['dashboard','minimal'],desc:'绿色 + 深灰，金融数据看板标准配色',swatches:['#16A34A','#15803D','#DCFCE7','#1F2937','#F9FAFB','#6B7280']},
+    {name:'Green & Purple',tags:['bold','premium'],desc:'绿色 + 紫色互补，现代感强，参考设计类平台',swatches:['#16A34A','#DCFCE7','#FFFFFF','#7C3AED','#EDE9FE','#1F2937']},
+    {name:'Eco Minimal',tags:['minimal','editorial'],desc:'绿色 + 纯白 + 暖米色，清新自然，适合环保/健康',swatches:['#16A34A','#166534','#F0FDF4','#FFFDF7','#FFFFFF','#374151']},
+  ],
+  '#0D9488':[
+    {name:'Teal SaaS',tags:['saas','light'],desc:'青绿 + 浅薄荷，参考 Airtable、Intercom',swatches:['#0D9488','#14B8A6','#CCFBF1','#F0FDFA','#F8FAFC','#134E4A']},
+    {name:'Digital Health',tags:['dashboard','minimal'],desc:'青绿 + 纯白 + 浅灰，医疗健康 SaaS 标准配色',swatches:['#0D9488','#0F766E','#CCFBF1','#FFFFFF','#F1F5F9','#374151']},
+    {name:'Teal & Gold',tags:['bold','premium'],desc:'青绿 + 金黄强调，活跃感强，参考金融科技产品',swatches:['#0D9488','#2BA8A2','#E8F6F5','#FFD23F','#FFF8E7','#1A1A1A']},
+    {name:'Deep Teal',tags:['dark','dashboard'],desc:'青绿 + 深色背景，质感强，适合深色数据看板',swatches:['#0D9488','#134E4A','#1F2937','#F0FDFA','#E2E8F0','#9CA3AF']},
+  ],
+  '#2563EB':[
+    {name:'Blueprint',tags:['saas','light'],desc:'天蓝 + 浅蓝背景，参考 Jira、Google Workspace',swatches:['#2563EB','#3B82F6','#BFDBFE','#EFF6FF','#1E40AF','#1E293B']},
+    {name:'Blue & Cyan',tags:['bold','dashboard'],desc:'蓝色 + 青色辅色，参考 Figma、Webflow',swatches:['#2563EB','#06B6D4','#CFFAFE','#EFF6FF','#F0F9FF','#0F172A']},
+    {name:'Linear Style',tags:['minimal','dark'],desc:'高饱和蓝 + 大量留白，参考 Linear、Lark',swatches:['#2563EB','#1D4ED8','#DBEAFE','#FFFFFF','#F8FAFC','#475569']},
+    {name:'Blue & Orange',tags:['bold','ecommerce'],desc:'蓝橙互补高对比，参考 Firefox、GitLab',swatches:['#2563EB','#DBEAFE','#FFFFFF','#EA580C','#FED7AA','#1E293B']},
+  ],
+  '#1E3A8A':[
+    {name:'Navy Classic',tags:['premium','dashboard'],desc:'深蓝 + 银白 + 金色强调，参考 IBM、LinkedIn',swatches:['#1E3A8A','#3B5FBF','#DBEAFE','#F8FAFC','#F59E0B','#1E293B']},
+    {name:'Tech Minimal',tags:['minimal','saas'],desc:'深蓝 + 纯白 + 浅蓝灰，参考 Notion、Linear',swatches:['#1E3A8A','#2563EB','#EFF6FF','#F8FAFC','#64748B','#0F172A']},
+    {name:'Stripe Dark',tags:['dark','premium'],desc:'深蓝 + 深灰 + 冷白，参考 Stripe、Vercel',swatches:['#1E3A8A','#1E293B','#334155','#F1F5F9','#E2E8F0','#94A3B8']},
+    {name:'Navy & Gold',tags:['bold','ecommerce'],desc:'深蓝 + 琥珀金，视觉冲击力强，参考金融产品',swatches:['#1E3A8A','#1D4ED8','#DBEAFE','#FFFBEB','#D97706','#92400E']},
+  ],
+  '#7C3AED':[
+    {name:'Twitch Purple',tags:['bold','saas'],desc:'紫色 + 浅紫背景，参考 Twitch、Figma',swatches:['#7C3AED','#A855F7','#EDE9FE','#FAF5FF','#FFFFFF','#3B0764']},
+    {name:'Purple & Gold',tags:['premium','ecommerce'],desc:'深紫 + 金色强调，奢华感十足',swatches:['#7C3AED','#5B21B6','#EDE9FE','#F59E0B','#FFFBEB','#1C1917']},
+    {name:'Raycast Dark',tags:['dark','minimal'],desc:'紫色 + 深色背景，赛博感，参考 Linear、Raycast',swatches:['#7C3AED','#6D28D9','#1E1B4B','#0F0F1A','#E9D5FF','#A78BFA']},
+    {name:'Purple & Blue',tags:['saas','light'],desc:'紫蓝渐变系，参考 Notion AI、Loom',swatches:['#7C3AED','#2563EB','#EDE9FE','#DBEAFE','#F8FAFC','#1E293B']},
+    {name:'Pink & Purple',tags:['bold','ecommerce'],desc:'紫粉组合，消费类 SaaS 常用，参考 Dribbble',swatches:['#7C3AED','#EC4899','#EDE9FE','#FCE7F3','#FFFFFF','#1F2937']},
+  ],
+  '#9F7AEA':[
+    {name:'Lavender',tags:['light','minimal'],desc:'浅紫 + 柔白背景，温柔克制，参考 Notion、Coda',swatches:['#9F7AEA','#B794F4','#FAF5FF','#FFFFFF','#F7FAFC','#44337A']},
+    {name:'Purple Pastel',tags:['light','editorial'],desc:'浅紫 + 粉色辅助，适合消费类/女性向产品',swatches:['#9F7AEA','#ED64A6','#FAF5FF','#FFF5F7','#FFFFFF','#322659']},
+    {name:'Violet Pro',tags:['saas','dashboard'],desc:'浅紫 + 深紫 + 浅灰，专业感与创意感并存',swatches:['#9F7AEA','#6B46C1','#EDE9FE','#F7FAFC','#FFFFFF','#2D3748']},
+  ],
+  '#DB2777':[
+    {name:'Dribbble Pink',tags:['bold','ecommerce'],desc:'玫红 + 浅粉背景，参考 Dribbble、Pinterest',swatches:['#DB2777','#EC4899','#FCE7F3','#FDF2F8','#FFFFFF','#831843']},
+    {name:'Pink & Purple',tags:['saas','bold'],desc:'玫红 + 紫色，现代感强，参考消费 App',swatches:['#DB2777','#7C3AED','#FCE7F3','#EDE9FE','#FFFFFF','#1F2937']},
+    {name:'Rose Minimal',tags:['minimal','light'],desc:'玫红 + 大量白 + 深灰文字，简洁有力',swatches:['#DB2777','#BE185D','#FCE7F3','#FFFFFF','#F9FAFB','#374151']},
+    {name:'Coral Warm',tags:['light','ecommerce'],desc:'玫红 + 橙粉辅色，温暖活力，参考健康类 App',swatches:['#DB2777','#F43F5E','#FCE7F3','#FFF1F2','#FFF7ED','#1C1917']},
+  ],
+  '#374151':[
+    {name:'Pro Neutral',tags:['minimal','saas'],desc:'深灰 + 浅灰层级，参考 Notion、Linear',swatches:['#374151','#6B7280','#E5E7EB','#F9FAFB','#FFFFFF','#111827']},
+    {name:'Gray & Blue',tags:['dashboard','saas'],desc:'中性灰 + 蓝色强调，参考 Slack、Dropbox',swatches:['#374151','#1F2937','#F3F4F6','#2563EB','#DBEAFE','#FFFFFF']},
+    {name:'GitHub Dark',tags:['dark','minimal'],desc:'深灰背景 + 白色内容，参考 Vercel、GitHub',swatches:['#374151','#111827','#1F2937','#F9FAFB','#E5E7EB','#9CA3AF']},
+    {name:'Gray & Gold',tags:['premium','dashboard'],desc:'中性灰 + 金色点缀，高端质感',swatches:['#374151','#1F2937','#F3F4F6','#D97706','#FFFBEB','#FFFFFF']},
+  ],
+  'custom':[
+    {name:'Universal A',tags:['light','saas'],desc:'主色 + 浅色背景 + 深色文字 + 白底，基础配色结构',swatches:['#6366F1','#818CF8','#E0E7FF','#FFFFFF','#1E293B','#64748B']},
+    {name:'Universal B',tags:['dashboard','bold'],desc:'主色 + 互补强调色 + 中性背景，适合 B 端信息密度',swatches:['#6366F1','#F59E0B','#EEF2FF','#FFFBEB','#F8FAFC','#374151']},
+    {name:'Universal C',tags:['minimal','dark'],desc:'主色深浅变体 + 大量留白，极简风格',swatches:['#4F46E5','#6366F1','#C7D2FE','#FFFFFF','#F1F5F9','#0F172A']},
+  ]
+};
+
+const TAG_COLORS = {
+  'bold':'#FEE2E2:#991B1B','dark':'#1F2937:#E5E7EB','light':'#EFF6FF:#1E40AF',
+  'minimal':'#F3F4F6:#374151','saas':'#EDE9FE:#5B21B6','dashboard':'#DBEAFE:#1E40AF',
+  'editorial':'#FEF3C7:#92400E','ecommerce':'#FCE7F3:#9D174D','premium':'#FFFBEB:#92400E'
+};
+
+function selectColor(el){
+  document.querySelectorAll('.cdot').forEach(c=>{
+    c.classList.remove('active');
+    c.style.removeProperty('--active-col');
+  });
+  el.classList.add('active');
+  const col=el.getAttribute('data-color');
+  const label=el.getAttribute('data-label');
+  if(col && col!=='custom') el.style.setProperty('--active-col', col);
+  else el.style.setProperty('--active-col','#6366F1');
+
+  // update label row
+  const preview=document.getElementById('color-dot-preview');
+  const labelEl=document.getElementById('color-label-text');
+  if(preview && labelEl){
+    preview.style.background = (col&&col!=='custom') ? col : 'conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)';
+    labelEl.textContent = col!=='custom' ? label+' '+col : '品牌色自定义';
+  }
+  renderPalette(col||'custom');
+}
+
+function isLight(hex){
+  if(!hex||hex==='custom')return true;
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return (r*299+g*587+b*114)/1000>155;
+}
+
+function renderPalette(colorKey){
+  const panel=document.getElementById('palette-panel');
+  const schemes=PALETTES[colorKey];
+  if(!schemes||!schemes.length){panel.innerHTML='';return;}
+
+  const rows = schemes.map((s,i)=>{
+    const swatchHtml = s.swatches.map(c=>`<div class="swatch-block" style="background:${c}"></div>`).join('');
+    const tagHtml = s.tags.map(t=>{
+      const [bg,fg]=(TAG_COLORS[t]||'#F3F4F6:#374151').split(':');
+      return `<span class="scheme-tag" style="background:${bg};color:${fg};border-color:${bg}">${t}</span>`;
+    }).join('');
+    return `<div class="scheme-row" data-idx="${i}" onclick="selectScheme(this,${i},'${colorKey}')">
+      <div class="scheme-swatches">${swatchHtml}</div>
+      <div class="scheme-info">
+        <div class="scheme-name">${s.name}</div>
+        <div class="scheme-desc">${s.desc}</div>
+        <div class="scheme-tags">${tagHtml}</div>
+      </div>
+      <div style="flex-shrink:0;width:18px;height:18px;border-radius:50%;border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px" class="row-check"></div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px">配色方案</div><div style="display:flex;flex-direction:column;gap:2px">${rows}</div>`;
+}
+
+let selectedScheme=null;
+function selectScheme(el,idx,colorKey){
+  document.querySelectorAll('.scheme-row').forEach(r=>{
+    r.classList.remove('selected');
+    const ch=r.querySelector('.row-check');
+    if(ch){ch.innerHTML='';ch.style.background='';ch.style.borderColor='';}
+  });
+  el.classList.add('selected');
+  const ch=el.querySelector('.row-check');
+  if(ch){
+    ch.innerHTML='<i class="fa-solid fa-check" style="color:#fff;font-size:8px"></i>';
+    ch.style.background='var(--accent)';
+    ch.style.borderColor='var(--accent)';
+  }
+  selectedScheme=PALETTES[colorKey][idx];
+}
+
+function updateColorChips(){
+  // legacy compat - no-op
+}
+
+function getOn(id){
+  return Array.from(document.querySelectorAll('#'+id+' .chip.on')).map(c=>c.textContent.trim());
+}
+
+function handleImgs(input){
+  const files=[...input.files];
+  const toAdd=files.slice(0,8-uploadedImgs.length);
+  toAdd.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=e=>{uploadedImgs.push({name:f.name,url:e.target.result});renderPreviews();};
+    reader.readAsDataURL(f);
+  });
+  input.value='';
+}
+
+function renderPreviews(){
+  document.getElementById('img-previews').innerHTML=uploadedImgs.map((img,i)=>`
+    <div class="img-thumb"><img src="${img.url}" alt="${img.name}">
+    <button class="del-btn" onclick="removeImg(${i})"><i class="fa-solid fa-xmark"></i></button></div>
+  `).join('');
+}
+
+function removeImg(i){ uploadedImgs.splice(i,1); renderPreviews(); }
+
+function getRoleText(){
+  const chip=getOn('role-chips')[0]||'自定义';
+  if(chip==='自定义'){
+    return document.getElementById('role-custom').value.trim()||'资深 UI/UX 设计师';
+  }
+  return chip;
+}
+
+function buildPrompt(){
+  const tool=TOOLS[curTool];
+  const cfg=MODES[curMode];
+  const modeLabel={admin:'B 端管理后台（PC Web）',miniapp:'微信小程序',app:'移动 App（iOS/Android）',h5:'移动端 H5'}[curMode];
+  const toolLabel={claude:'Claude / Claude.ai',cursor:'Cursor',figma:'Figma Make'}[curTool];
+  const roleText=getRoleText();
+  const pageName=document.getElementById('page-name').value.trim()||'（请填写页面名称）';
+  const targetUser=document.getElementById('target-user').value.trim()||'业务运营/管理人员';
+  const features=document.getElementById('features').value.trim()||'（请填写功能需求）';
+  const styleDesc=document.getElementById('style-desc').value.trim();
+  const extra=document.getElementById('extra').value.trim();
+  const comps=getOn('comp-chips');
+  const styles=getOn('style-chips');
+  const activeDot=document.querySelector('.cdot.active');const colors=activeDot?[activeDot.getAttribute('data-label')+' '+activeDot.getAttribute('data-color')]:['深蓝 #1E3A8A'];
+  const schemeNote=selectedScheme?`\n配色方案：${selectedScheme.name}\n色板：${selectedScheme.swatches.join('  ')}\n说明：${selectedScheme.desc}`:'';
+  const imgNote=uploadedImgs.length>0?`\n\n## 参考截图\n已附上 ${uploadedImgs.length} 张参考截图，请仔细观察其布局结构、色彩搭配和组件样式，在生成原型时对齐上述视觉风格。`:'';
+
+  return `## AI 角色
+你是一位${roleText}，请以该角色的专业视角和经验积累完成本次原型设计任务。
+
+# 任务：生成高保真 UI 原型
+
+## 基本信息
+- 页面名称：${pageName}
+- 产品类型：${modeLabel}
+- 目标用户：${targetUser}
+- 使用工具：${toolLabel}
+- 输出格式：${tool.fmt}
+- 视觉风格：${styles.join('、')||'简约现代'}
+- 主色调：${colors[0]||'深蓝 #1E3A8A'}${schemeNote?`\n- 配色方案：${selectedScheme.name} — ${selectedScheme.swatches.join(' / ')}`:''}${styleDesc?`\n- 风格描述：${styleDesc}`:''}
+
+## 功能需求
+${features}
+
+## 平台与设计规范
+${cfg.spec}
+
+## 必须包含的 UI 组件
+${comps.length>0?comps.map(c=>`- ${c}`).join('\n'):'- 根据功能需求自行判断'}
+
+## 内容与数据要求
+- 使用真实业务场景的示例数据，禁止 "xxx"、"测试数据"、"Lorem ipsum" 等占位内容
+- 数据量合理（表格至少 8 条，卡片至少 6 个），体现真实密度感
+- 状态多样化（如混合"待审核、已通过、已拒绝、已过期"等）
+- 金额/数字格式化（千分位、保留小数、单位标注）
+
+## 代码质量要求
+- 样式完整，每个组件必须有完整视觉样式，不允许只有结构骨架
+- 所有可点击元素有 hover / active 状态
+- 表单元素有 focus 样式，错误状态有红色提示
+- 关键区块有简短中文注释
+${tool.extra}${extra?`\n\n## 交互说明\n${extra}`:''}${imgNote}
+
+## 输出规范
+- ${cfg.outputNote}
+- 代码完整输出，不允许省略（不要写"其余代码类似"）
+- 输出后附 3-5 条设计决策说明`;
+}
+
+function gen(){
+  document.getElementById('out').textContent=buildPrompt();
+  document.getElementById('modal-mask').style.display='flex';
+  document.body.style.overflow='hidden';
+}
+
+function closeModal(e){
+  if(e&&e.target!==document.getElementById('modal-mask'))return;
+  document.getElementById('modal-mask').style.display='none';
+  document.body.style.overflow='';
+}
+
+function copyOut(){
+  const t=document.getElementById('out').textContent;
+  if(!t)return;
+  navigator.clipboard.writeText(t).then(()=>{
+    const el=document.getElementById('copied-tip');
+    el.classList.add('show');
+    setTimeout(()=>el.classList.remove('show'),2000);
+  });
+}
+
+function exportMD(){
+  const pageName=document.getElementById('page-name').value.trim()||'未命名页面';
+  const targetUser=document.getElementById('target-user').value.trim()||'业务运营/管理人员';
+  const features=document.getElementById('features').value.trim()||'（未填写）';
+  const extra=document.getElementById('extra').value.trim();
+  const styleDesc=document.getElementById('style-desc').value.trim();
+  const comps=getOn('comp-chips');
+  const styles=getOn('style-chips');
+  const activeDot=document.querySelector('.cdot.active');const colors=activeDot?[activeDot.getAttribute('data-label')+' '+activeDot.getAttribute('data-color')]:['深蓝 #1E3A8A'];
+  const schemeNote=selectedScheme?`\n配色方案：${selectedScheme.name}\n色板：${selectedScheme.swatches.join('  ')}\n说明：${selectedScheme.desc}`:'';
+  const modeLabel={admin:'B 端管理后台（PC Web）',miniapp:'微信小程序',app:'移动 App（iOS/Android）',h5:'移动端 H5'}[curMode];
+  const toolLabel={claude:'Claude / Claude.ai',cursor:'Cursor',figma:'Figma Make'}[curTool];
+  const roleText=getRoleText();
+  const now=new Date().toLocaleString('zh-CN');
+
+  const md=`# 原型需求配置文档
+
+> 导出时间：${now}
+
+## 基本配置
+
+| 配置项 | 内容 |
+|--------|------|
+| AI 角色 | ${roleText} |
+| 页面名称 | ${pageName} |
+| 产品类型 | ${modeLabel} |
+| 目标用户 | ${targetUser} |
+| AI 工具 | ${toolLabel} |
+| 视觉风格 | ${styles.join('、')||'简约现代'} |
+| 主色调 | ${colors[0]||'深蓝 #1E3A8A'} |${selectedScheme?`\n| 配色方案 | ${selectedScheme.name} — ${selectedScheme.swatches.join(' / ')} |`:''}${styleDesc?`\n| 风格描述 | ${styleDesc} |`:''}
+
+## 核心功能需求
+
+${features}
+
+## UI 组件清单
+
+${comps.length>0?comps.map(c=>`- ${c}`).join('\n'):'- 根据功能需求自行判断'}
+${extra?`\n## 交互说明\n\n${extra}`:''}
+${uploadedImgs.length>0?`\n## 参考截图\n\n共上传 ${uploadedImgs.length} 张参考截图（截图文件需单独保存）`:''}
+
+---
+
+## 完整 Prompt
+
+\`\`\`
+${buildPrompt()}
+\`\`\`
+`;
+
+  const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`原型需求-${pageName}-${Date.now()}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function doAnalyze(){
+  const input=document.getElementById('analyze-input').value.trim();
+  if(!input){alert('请先粘贴需要分析的 Prompt 内容');return;}
+  document.getElementById('analyzing-tip').classList.add('show');
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:1000,
+        messages:[{role:'user',content:`你是一个 UI 原型需求解析助手。请从以下文本中提取关键信息，只返回 JSON，不要有任何其他内容。
+
+JSON 结构：
+{"tool":"claude|cursor|figma","mode":"admin|miniapp|app|h5","pageName":"页面名称","targetUser":"目标用户","features":"功能需求","styles":["风格1"],"colors":["色调1"],"role":"AI角色","styleDesc":"风格描述","extra":"交互说明"}
+
+tool：Claude/claude.ai→claude；Cursor/IDE→cursor；Figma→figma；不确定→claude
+mode：后台/管理/PC/Web→admin；小程序/微信/支付宝→miniapp；App/iOS/Android→app；H5/活动页→h5；不确定→admin
+styles（最多2个）：简约现代、企业商务、极简主义、科技感、温暖友好、高端奢华、活泼年轻、暗黑模式
+colors（最多2个）：深蓝 #1E3A8A、天蓝 #2563EB、青绿 #0D9488、翠绿 #16A34A、橙色 #EA580C、紫色 #7C3AED、玫红 #DB2777、中性灰 #374151、品牌色自定义
+role：优先匹配「资深 UI 设计师、全栈前端工程师、B 端产品设计专家、交互体验设计师」，否则提取原文
+styleDesc：提取视觉风格、参考产品、设计细节描述，无则为空
+extra：提取交互、动效、状态说明，无则为空
+
+待分析：\n${input}`}]
+      })
+    });
+    const data=await resp.json();
+    const clean=data.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    applyParsed(JSON.parse(clean));
+  }catch(e){alert('解析失败，请检查网络或重试');}
+  finally{document.getElementById('analyzing-tip').classList.remove('show');}
+}
+
+function applyParsed(p){
+  if(p.tool&&TOOLS[p.tool]) selectTool(p.tool);
+  if(p.mode&&MODES[p.mode]) selectMode(p.mode);
+  if(p.pageName) document.getElementById('page-name').value=p.pageName;
+  if(p.targetUser) document.getElementById('target-user').value=p.targetUser;
+  if(p.features) document.getElementById('features').value=p.features;
+  if(p.extra) document.getElementById('extra').value=p.extra;
+  if(p.styleDesc) document.getElementById('style-desc').value=p.styleDesc;
+  if(p.styles&&p.styles.length) document.querySelectorAll('#style-chips .chip').forEach(c=>c.classList.toggle('on',p.styles.includes(c.textContent.trim())));
+  if(p.colors&&p.colors.length) document.querySelectorAll('#color-chips .chip').forEach(c=>c.classList.toggle('on',p.colors.includes(c.textContent.trim())));
+  if(p.role){
+    const chips=[...document.querySelectorAll('#role-chips .chip')];
+    const match=chips.find(c=>c.textContent.trim()===p.role);
+    if(match){ selectRole(match,p.role); }
+    else {
+      const customChip=chips.find(c=>c.textContent.trim()==='自定义');
+      if(customChip) selectRole(customChip,'自定义');
+      document.getElementById('role-custom').value=p.role;
+    }
+  }
+  document.getElementById('page-name').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.getElementById('modal-mask').style.display='none';document.body.style.overflow='';}});
+
+selectTool('claude');
+selectMode('admin');
+// init default color dot
+(function(){
+  const def=document.querySelector('.cdot.active');
+  if(def){
+    const col=def.getAttribute('data-color');
+    if(col&&col!=='custom') def.style.setProperty('--active-col',col);
+    renderPalette(col||'custom');
+  }
+})();
+</script>
+</body>
+</html>
